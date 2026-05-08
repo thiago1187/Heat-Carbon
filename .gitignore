@@ -1,0 +1,12 @@
+# Banco de dados — não sobe (dados pessoais)
+data/taggy.db
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Cache do Jupyter
+.ipynb_checkpoints/
+
+# Mac
+.DS_Store
