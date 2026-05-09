@@ -1,7 +1,7 @@
-# =============================================================================
+
 # banco.py — Banco de dados SQLite do projeto Heat Carbon
 # Projeto: Projetos 2 — Cesar School
-# =============================================================================
+
 
 import sqlite3
 import os

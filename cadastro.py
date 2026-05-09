@@ -1,10 +1,6 @@
-# =============================================================================
 # cadastro.py — Registro de uso da Taggy pelo usuário
 # Projeto: Heat Carbon | Projetos 2 — Cesar School
-#
-# Como rodar:
-#   python3 cadastro.py
-# =============================================================================
+
 
 import os
 import sys
@@ -16,9 +12,9 @@ os.chdir(BASE_DIR)
 from metodologia import calcular_total, CONSUMO_EXTRA_POR_EVENTO, FATOR_EMISSAO_COMBUSTIVEL
 from banco import inserir_perfil, inserir_registro
 
-# -----------------------------------------------------------------------------
+
 # OPÇÕES DISPONÍVEIS
-# -----------------------------------------------------------------------------
+
 
 VEICULOS = {
     "1": "carro_leve",
@@ -35,9 +31,8 @@ COMBUSTIVEIS = {
     "5": "eletrico",
 }
 
-# -----------------------------------------------------------------------------
 # FUNÇÕES AUXILIARES
-# -----------------------------------------------------------------------------
+
 
 def perguntar_inteiro(mensagem, minimo=0):
     while True:
@@ -62,9 +57,9 @@ def perguntar_opcao(mensagem, opcoes: dict):
         print("  Opção inválida. Tente novamente.")
 
 
-# -----------------------------------------------------------------------------
+
 # FLUXO DE CADASTRO
-# -----------------------------------------------------------------------------
+
 
 def main():
     print("\n========================================")

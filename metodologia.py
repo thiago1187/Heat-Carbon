@@ -1,20 +1,12 @@
-# =============================================================================
-# metodologia.py — Calculadora de emissões evitadas pelo uso da Taggy
+# Calculadora de emissões evitadas pelo uso da Taggy
 # Projeto: Heat Carbon | Projetos 2 — Cesar School
 #
-# Fontes:
-#   - Fatores de emissão veicular: CETESB, Relatório de Emissões Veiculares 2023
-#   - Metodologia de emissões evitadas: GHG Protocol Brasil
-#   - Equivalência por árvore: IPCC AR6 (média espécies tropicais)
-# =============================================================================
 
 
-# -----------------------------------------------------------------------------
 # TABELAS DE REFERÊNCIA
-# -----------------------------------------------------------------------------
 
-# Combustível extra queimado por evento de pedágio SEM Taggy (em litros)
-# Lógica: sem free flow, o veículo desacelera, para/fica em marcha lenta
+# (Feito por Vini)
+# Lógica: sem taggy, o veículo desacelera, para/fica em marcha lenta
 # e acelera novamente — esse ciclo consome combustível extra.
 CONSUMO_EXTRA_POR_EVENTO = {
     "carro_leve":      0.15,   # ex: Gol, HB20, Onix
@@ -23,8 +15,8 @@ CONSUMO_EXTRA_POR_EVENTO = {
     "caminhao":        0.35,   # veículo pesado / frete
 }
 
-# Fator de emissão por combustível (kgCO2e por litro)
-# Fonte: CETESB 2023
+# Fator de emissão por combustível (kgCO2e por litro)  Fonte: CETESB 2023
+
 FATOR_EMISSAO_COMBUSTIVEL = {
     "gasolina": 2.27,
     "etanol":   1.61,
@@ -37,14 +29,13 @@ FATOR_EMISSAO_COMBUSTIVEL = {
 # Base: ticket térmico ~5g de papel; produção de papel ~1,0 kgCO2e/kg
 CO2E_POR_TICKET_PAPEL = 0.005
 
-# Absorção média anual de CO2 por árvore tropical (em kg/ano)
-# Fonte: IPCC AR6 — média espécies tropicais brasileiras
+# Absorção média anual de CO2 por árvore  (em kg/ano) Fonte: IPCC AR6 — média espécies tropicais brasileiras
 ABSORCAO_ARVORE_KG_ANO = 21.77
 
 
-# -----------------------------------------------------------------------------
+
 # FUNÇÕES DE CÁLCULO
-# -----------------------------------------------------------------------------
+
 
 def calcular_co2e_pedagio(passagens: int, tipo_veiculo: str, combustivel: str) -> float:
     """
@@ -104,10 +95,8 @@ def calcular_total(
     }
 
 
-# -----------------------------------------------------------------------------
-# TESTE RÁPIDO — rode este arquivo diretamente para verificar os cálculos
-# $ python metodologia.py
-# -----------------------------------------------------------------------------
+
+# TESTE RÁPIDO
 
 if __name__ == "__main__":
     # Exemplo: usuário com carro flex, 20 pedágios e 8 estacionamentos no mês
