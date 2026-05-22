@@ -1,0 +1,11 @@
+# Heat Carbon — dependencias do projeto
+# Dashboard (dashboard.py)
+streamlit
+pandas
+pydeck
+plotly
+
+# Notebook de analise (analise.ipynb)
+matplotlib
+seaborn
+folium
