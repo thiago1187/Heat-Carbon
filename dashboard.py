@@ -10,6 +10,7 @@ import sys
 import json
 import random
 import unicodedata
+from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -51,6 +52,18 @@ def norm_bairro(s: str) -> str:
 # =============================================================================
 CARBON_POINTS_POR_KG_CO2E = 10
 CARBON_POINTS_POR_MILE = 100
+
+
+# Estimativa de km por passagem de pedágio (média para rodovias de PE)
+KM_MEDIO_POR_PASSAGEM = 30
+
+
+def classificar_perfil_uso(passagens: int) -> str:
+    if passagens <= 5:
+        return "Casual"
+    elif passagens <= 15:
+        return "Frequente"
+    return "Intensivo"
 
 
 def calcular_carbon_points(co2e_kg):
@@ -151,6 +164,7 @@ def gerar_dados_exemplo(qtd: int = 45):
     random.seed(42)  # reprodutivel: mesmo conjunto a cada clique
     tipos = list(CONSUMO_EXTRA_POR_EVENTO.keys())
     combustiveis = list(FATOR_EMISSAO_COMBUSTIVEL.keys())
+    hoje = datetime.now()
 
     for i in range(qtd):
         nome = f"{random.choice(NOMES_FICTICIOS)} {random.randint(1, 99)}"
@@ -159,6 +173,10 @@ def gerar_dados_exemplo(qtd: int = 45):
         combustivel = random.choice(combustiveis)
         passagens = random.randint(1, 30)
         estacionamentos = random.randint(0, 25)
+        # Distribui os registros nos últimos 90 dias para o gráfico temporal
+        registrado_em = (hoje - timedelta(days=random.randint(0, 90))).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
         # Calculo REAL pela metodologia do projeto
         resultado = calcular_total(
@@ -177,6 +195,7 @@ def gerar_dados_exemplo(qtd: int = 45):
             co2e_pedagio_kg=resultado["co2e_pedagio_kg"],
             co2e_estac_kg=resultado["co2e_estacionamento_kg"],
             co2e_total_kg=resultado["co2e_total_kg"],
+            registrado_em=registrado_em,
         )
 
 
@@ -326,6 +345,280 @@ def montar_resumo_bairro(dados: pd.DataFrame) -> pd.DataFrame:
     resumo["carbon_points"] = resumo["carbon_points"].round(0)
     resumo["carbon_miles"] = resumo["carbon_miles"].round(2)
     return resumo
+
+
+def render_analise_avancada(dados: pd.DataFrame):
+    st.subheader("Análise avançada")
+
+    dados_ext = dados.copy()
+    dados_ext["km_estimado"] = dados_ext["passagens"] * KM_MEDIO_POR_PASSAGEM
+    dados_ext["perfil_uso"] = dados_ext["passagens"].apply(classificar_perfil_uso)
+
+    (
+        aba_dispersao,
+        aba_temporal,
+        aba_dist,
+        aba_ranking,
+        aba_comparacao,
+    ) = st.tabs(
+        [
+            "Dispersão",
+            "Evolução temporal",
+            "Distribuição",
+            "Ranking ambiental",
+            "Com vs Sem Taggy",
+        ]
+    )
+
+    # ── 1 & 2 · Dispersão ─────────────────────────────────────────────────────
+    with aba_dispersao:
+        st.markdown("##### Frequência de uso vs CO₂ evitado")
+        st.caption("Mostra se quem usa mais a tag gera mais impacto positivo.")
+        fig_scatter1 = px.scatter(
+            dados_ext,
+            x="passagens",
+            y="co2e_total_kg",
+            color="tipo_veiculo",
+            size="co2e_total_kg",
+            hover_data=["nome", "bairro", "combustivel"],
+            labels={
+                "passagens": "Passagens de pedágio",
+                "co2e_total_kg": "CO₂e evitado (kg)",
+                "tipo_veiculo": "Tipo de veículo",
+            },
+            title="Quem usa mais a Taggy evita mais CO₂?",
+        )
+        st.plotly_chart(fig_scatter1, use_container_width=True)
+
+        st.markdown("##### Distância estimada vs CO₂ evitado")
+        st.caption(
+            f"Distância estimada: {KM_MEDIO_POR_PASSAGEM} km médios por passagem "
+            "(média rodovias PE). Cada combustível forma um cluster próprio."
+        )
+        fig_scatter2 = px.scatter(
+            dados_ext,
+            x="km_estimado",
+            y="co2e_total_kg",
+            color="combustivel",
+            symbol="tipo_veiculo",
+            hover_data=["nome", "passagens"],
+            labels={
+                "km_estimado": "Distância estimada (km)",
+                "co2e_total_kg": "CO₂e evitado (kg)",
+                "combustivel": "Combustível",
+                "tipo_veiculo": "Veículo",
+            },
+            title="Distância percorrida vs emissão evitada por combustível",
+        )
+        st.plotly_chart(fig_scatter2, use_container_width=True)
+
+    # ── 3 · Evolução temporal ─────────────────────────────────────────────────
+    with aba_temporal:
+        st.markdown("##### CO₂ evitado ao longo do tempo")
+        granularidade = st.radio(
+            "Granularidade", ["Semanal", "Mensal"], horizontal=True, key="gran_temporal"
+        )
+        freq = "W" if granularidade == "Semanal" else "ME"
+        dados_tempo = dados_ext.copy()
+        dados_tempo["periodo"] = (
+            dados_tempo["registrado_em"].dt.to_period(freq).dt.start_time
+        )
+        co2_periodo = (
+            dados_tempo.groupby("periodo")["co2e_total_kg"].sum().reset_index()
+        )
+        co2_periodo.columns = ["periodo", "co2e_total_kg"]
+        co2_periodo["co2e_acumulado"] = co2_periodo["co2e_total_kg"].cumsum()
+
+        if len(co2_periodo) <= 1:
+            st.info(
+                "Todos os registros têm a mesma data — clique em 'Limpar dados' "
+                "e depois 'Gerar dados de exemplo' para distribuir no tempo."
+            )
+        else:
+            col_area1, col_area2 = st.columns(2)
+            with col_area1:
+                fig_area = px.area(
+                    co2_periodo,
+                    x="periodo",
+                    y="co2e_total_kg",
+                    labels={
+                        "periodo": "Período",
+                        "co2e_total_kg": "CO₂e evitado (kg)",
+                    },
+                    title=f"CO₂e evitado por {granularidade.lower()[:-2]}",
+                    color_discrete_sequence=["#19d3f3"],
+                )
+                st.plotly_chart(fig_area, use_container_width=True)
+            with col_area2:
+                fig_acum = px.area(
+                    co2_periodo,
+                    x="periodo",
+                    y="co2e_acumulado",
+                    labels={
+                        "periodo": "Período",
+                        "co2e_acumulado": "CO₂e acumulado (kg)",
+                    },
+                    title="CO₂e acumulado",
+                    color_discrete_sequence=["#00cc96"],
+                )
+                st.plotly_chart(fig_acum, use_container_width=True)
+
+    # ── 4 · Violino ───────────────────────────────────────────────────────────
+    with aba_dist:
+        st.markdown("##### Distribuição de CO₂ evitado por perfil de uso")
+        st.caption("Casual: ≤ 5 passagens · Frequente: 6–15 · Intensivo: > 15")
+        fig_violin = px.violin(
+            dados_ext,
+            x="perfil_uso",
+            y="co2e_total_kg",
+            color="perfil_uso",
+            box=True,
+            points="all",
+            hover_data=["nome", "tipo_veiculo"],
+            labels={
+                "perfil_uso": "Perfil de uso",
+                "co2e_total_kg": "CO₂e evitado (kg)",
+            },
+            title="Variação de impacto ambiental por perfil",
+            category_orders={"perfil_uso": ["Casual", "Frequente", "Intensivo"]},
+        )
+        st.plotly_chart(fig_violin, use_container_width=True)
+
+    # ── 5 · Ranking ambiental ─────────────────────────────────────────────────
+    with aba_ranking:
+        st.markdown("##### Ranking ambiental com níveis ESG")
+
+        def tier_badge(points: float) -> str:
+            if points >= 10000:
+                return "Platina"
+            elif points >= 5000:
+                return "Ouro"
+            elif points >= 2500:
+                return "Prata"
+            elif points >= 500:
+                return "Bronze"
+            return "Iniciante"
+
+        ranking_env = montar_ranking_usuarios(dados_ext)
+        ranking_env["nivel"] = ranking_env["carbon_points"].map(tier_badge)
+        ranking_env.insert(0, "pos", range(1, len(ranking_env) + 1))
+        ranking_env = ranking_env[
+            ["pos", "nome", "nivel", "co2e_total_kg", "carbon_points", "carbon_miles", "registros"]
+        ]
+        ranking_env.columns = [
+            "#", "Usuário", "Nível", "CO₂e (kg)", "Carbon Points", "Carbon Miles", "Registros"
+        ]
+
+        st.dataframe(ranking_env, width="stretch", hide_index=True)
+
+        _rank_src = montar_ranking_usuarios(dados_ext).head(15)
+        _rank_src["nivel"] = _rank_src["carbon_points"].map(tier_badge)
+        fig_rank_env = px.bar(
+            _rank_src,
+            x="co2e_total_kg",
+            y="nome",
+            orientation="h",
+            color="nivel",
+            labels={
+                "nome": "Usuário",
+                "co2e_total_kg": "CO₂e evitado (kg)",
+                "nivel": "Nível",
+            },
+            title="Top 15 — Ranking Ambiental",
+            color_discrete_map={
+                "Platina": "#e5e4e2",
+                "Ouro": "#ffd700",
+                "Prata": "#c0c0c0",
+                "Bronze": "#cd7f32",
+                "Iniciante": "#90ee90",
+            },
+            category_orders={
+                "nivel": ["Platina", "Ouro", "Prata", "Bronze", "Iniciante"]
+            },
+        )
+        fig_rank_env.update_layout(yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(fig_rank_env, use_container_width=True)
+
+    # ── 6 · Comparação com vs sem Taggy ───────────────────────────────────────
+    with aba_comparacao:
+        st.markdown("##### Com Taggy vs Sem Taggy")
+        st.caption(
+            "Sem Taggy, cada passagem exige desaceleração → marcha lenta → aceleração, "
+            "gerando combustível extra queimado. Com a tag, esse ciclo não acontece."
+        )
+
+        total_pedagio = dados_ext["co2e_pedagio_kg"].sum()
+        total_estac = dados_ext["co2e_estac_kg"].sum()
+        total_evitado = total_pedagio + total_estac
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("CO₂e total evitado", f"{total_evitado:,.2f} kg")
+        m2.metric("Evitado em pedágios", f"{total_pedagio:,.2f} kg")
+        m3.metric("Evitado em estacionamentos", f"{total_estac:,.2f} kg")
+
+        comp_df = pd.DataFrame(
+            [
+                {"cenário": "Com Taggy", "origem": "Pedágio", "co2e_kg": 0.0},
+                {"cenário": "Com Taggy", "origem": "Estacionamento", "co2e_kg": 0.0},
+                {
+                    "cenário": "Sem Taggy",
+                    "origem": "Pedágio",
+                    "co2e_kg": round(total_pedagio, 2),
+                },
+                {
+                    "cenário": "Sem Taggy",
+                    "origem": "Estacionamento",
+                    "co2e_kg": round(total_estac, 2),
+                },
+            ]
+        )
+        fig_comp = px.bar(
+            comp_df,
+            x="cenário",
+            y="co2e_kg",
+            color="origem",
+            barmode="stack",
+            text_auto=".2f",
+            labels={"cenário": "Cenário", "co2e_kg": "CO₂e (kg)", "origem": "Fonte"},
+            title=f"{total_evitado:,.1f} kg CO₂e evitado graças à Taggy",
+            color_discrete_map={"Pedágio": "#ef553b", "Estacionamento": "#636efa"},
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+        st.markdown("##### Detalhe por usuário (top 15)")
+        user_comp = (
+            dados_ext.groupby("nome")
+            .agg(
+                co2e_pedagio_kg=("co2e_pedagio_kg", "sum"),
+                co2e_estac_kg=("co2e_estac_kg", "sum"),
+            )
+            .reset_index()
+            .assign(co2e_total=lambda d: d["co2e_pedagio_kg"] + d["co2e_estac_kg"])
+            .sort_values("co2e_total", ascending=False)
+            .head(15)
+        )
+        fig_user_comp = px.bar(
+            user_comp,
+            x="nome",
+            y=["co2e_pedagio_kg", "co2e_estac_kg"],
+            barmode="stack",
+            labels={
+                "nome": "Usuário",
+                "value": "CO₂e evitado (kg)",
+                "variable": "Origem",
+            },
+            title="Top 15 usuários — pedágio vs estacionamento",
+            color_discrete_map={
+                "co2e_pedagio_kg": "#ef553b",
+                "co2e_estac_kg": "#636efa",
+            },
+        )
+        fig_user_comp.for_each_trace(
+            lambda t: t.update(
+                name="Pedágio" if t.name == "co2e_pedagio_kg" else "Estacionamento"
+            )
+        )
+        st.plotly_chart(fig_user_comp, use_container_width=True)
 
 
 def render_kpis(dados: pd.DataFrame):
@@ -732,7 +1025,7 @@ with st.sidebar:
     st.header("Heat Carbon")
     pagina = st.radio(
         "Menu",
-        ["Menu / Cadastro", "Carteira / Marketplace", "Gráficos", "Relatórios"],
+        ["Menu / Cadastro", "Carteira / Marketplace", "Gráficos", "Análise Avançada", "Relatórios"],
     )
 
     st.divider()
@@ -821,5 +1114,7 @@ else:
         render_carteira(df_filtrado)
     elif pagina == "Gráficos":
         render_graficos(df_filtrado)
+    elif pagina == "Análise Avançada":
+        render_analise_avancada(df_filtrado)
     elif pagina == "Relatórios":
         render_relatorios(df_filtrado)

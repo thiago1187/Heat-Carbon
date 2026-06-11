@@ -48,14 +48,22 @@ def inserir_perfil(nome, bairro, tipo_veiculo, combustivel):
         return cursor.lastrowid
 
 
-def inserir_registro(perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg):
+def inserir_registro(perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg, registrado_em=None):
     with conectar() as con:
-        con.execute(
-            """INSERT INTO registros
-               (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg),
-        )
+        if registrado_em is not None:
+            con.execute(
+                """INSERT INTO registros
+                   (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg, registrado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg, registrado_em),
+            )
+        else:
+            con.execute(
+                """INSERT INTO registros
+                   (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (perfil_id, passagens, estacionamentos, co2e_pedagio_kg, co2e_estac_kg, co2e_total_kg),
+            )
 
 
 def carregar_dados():
